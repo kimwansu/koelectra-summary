@@ -41,14 +41,14 @@ def main():
         for doc_id in tqdm(train_set):
             sents = j_doc[doc_id]['sents']
             embed = np.empty()
-            for sent in sents:
+            for i, sent in enumerate(sents):
                 a = tokenizer.encode(sent, return_tensors='pt').cuda()
                 o = model(a).cpu()
                 # softmax용으로 후보 여러개 나오는 걸 고려해서 배열 비슷한 무언가로 만든 듯
                 o_np = o[0].cpu().detach().numpy()
                 
-            # 적절하게 합치는 방법을 못찾아서 임시로 문장마다 임베딩 저장
-            np.save(f'summary_embed/{doc_id}.embed', o_np)
+                # 적절하게 합치는 방법을 못찾아서 임시로 문장마다 임베딩 저장
+                np.save(f'summary_embed/{doc_id}_{i}.embed', o_np)
 
     # CPU로 실행 시간 테스트
     end = time.time()
@@ -60,4 +60,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
