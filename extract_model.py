@@ -47,7 +47,7 @@ def main():
                 # softmax용으로 후보 여러개 나오는 걸 고려해서 배열 비슷한 무언가로 만든 듯
                 o_np = o[0].cpu().detach().numpy()
                 
-            # 적절하게 합치는 방법을 못찾아서 임시로 문장마다 임베딩 저lfa
+            # 적절하게 합치는 방법을 못찾아서 임시로 문장마다 임베딩 저장
             np.save(f'summary_embed/{doc_id}.embed', o_np)
 
     # CPU로 실행 시간 테스트
