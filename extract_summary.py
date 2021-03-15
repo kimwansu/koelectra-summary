@@ -41,7 +41,6 @@ class RNN(nn.Module):
         x, _ = self.gru(x, h_0)
 
 
-
 def main():
     start = time.time()
 
@@ -78,7 +77,8 @@ def main():
                 continue
 
             # TODO: cross-validation 넣기
-            
+            # 위에서 doc_summary4.json 파일 열어서
+            # test에 속한 것인지, 몇번 train set에 속한 것인지 분류해놓기
 
             doc_id = fname.replace('.embed.npy', '')
 
@@ -92,20 +92,23 @@ def main():
             output, status = model(embed_tensors)
             label_H = torch.sigmoid(model_out(output))
             label_H = label_H.squeeze(2)  # 마지막 괄호 제거
-            label_H = label_H[:,-1]  # 마지막 상태만 추출
+            label_H = label_H[:, -1]  # 마지막 상태만 추출
 
             label_Y = torch.Tensor(j_doc[doc_id]['labels'])
 
             loss = criterion(label_H, label_Y)
             epoch_loss += loss.item()
 
+            # 여기쯤에서 검증 말뭉치로 성능 측정 시도
+            # 일정 횟수 이상 성능 개선이 되지 않으면 마지막 최고성능 가중치로 복원 후 종료
+            # 중간중간 상태 기록 필요
+
             loss.backward()
             optimizer.step()
 
         if epoch % 10 == 0:
             print(f'== Epoch {epoch+1} ==')
-            print(f'loss: {epoch_loss}') 
-
+            print(f'loss: {epoch_loss}')
 
     print('Ok.')
 
