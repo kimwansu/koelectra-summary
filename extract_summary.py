@@ -44,7 +44,7 @@ class RNN(nn.Module):
 def main():
     start = time.time()
 
-    cuda = torch.device('cuda:1')
+    cuda = torch.device('cuda:0')
     cpu = torch.device('cpu')
     device = cuda if torch.cuda.is_available() else cpu
 
@@ -55,11 +55,12 @@ def main():
         batch_first=True,
         bidirectional=True).to(device)
 
-    model_out = nn.Linear(2, 1)
+    model_out = nn.Linear(2, 1).to(device)
 
     lr = 0.1
-    criterion = nn.BCELoss()
+    criterion = nn.BCELoss().to(device)
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=3)
 
     # 정답 라벨 데이터 로드
     with open(corpus_dir + 'doc_summary4.json', 'r', encoding='utf-8') as f:
@@ -69,6 +70,7 @@ def main():
     embed_path = corpus_dir + 'summary_embed/'
 
     n_epochs = 1000
+    patience = 10  # 이 횟수만큼 성능 향상 없으면 학습 중단
 
     for epoch in range(n_epochs):
         epoch_loss = 0.0
@@ -80,6 +82,8 @@ def main():
             # 위에서 doc_summary4.json 파일 열어서
             # test에 속한 것인지, 몇번 train set에 속한 것인지 분류해놓기
 
+            # test, validate 제외하고 로드
+
             doc_id = fname.replace('.embed.npy', '')
 
             full_fname = os.path.join(embed_path, fname)
@@ -88,11 +92,11 @@ def main():
 
             # 한 문서의 모든 문장의 KoELECTRA 임베딩
             embeds = np.load(full_fname)
-            embed_tensors = torch.Tensor(embeds)
+            embed_tensors = torch.Tensor(embeds).to(device)
             output, status = model(embed_tensors)
             label_H = torch.sigmoid(model_out(output))
             label_H = label_H.squeeze(2)  # 마지막 괄호 제거
-            label_H = label_H[:, -1]  # 마지막 상태만 추출
+            label_H = label_H[:, -1].to(cpu)  # 마지막 상태만 추출
 
             label_Y = torch.Tensor(j_doc[doc_id]['labels'])
 
@@ -106,9 +110,15 @@ def main():
             loss.backward()
             optimizer.step()
 
+            val_loss = loss
+            scheduler.step(val_loss)
+
         if epoch % 10 == 0:
             print(f'== Epoch {epoch+1} ==')
             print(f'loss: {epoch_loss}')
+
+    model_state_fname = 'extract_summary.model'
+    torch.save(model.state_dict(), model_state_fname)
 
     print('Ok.')
 
