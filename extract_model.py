@@ -18,14 +18,14 @@ from config import corpus_dir
 def main():
     start = time.time()
 
-    cuda = torch.device('cuda:0')
+    cuda = torch.device('cuda:1')
     cpu = torch.device('cpu')
     device = cuda if torch.cuda.is_available() else cpu
 
     electra = 'monologg/koelectra-base-v2-discriminator'
 
     # KoELECTRA 모델 로드(v2)
-    model = ElectraModel.from_pretrained(electra).cuda()
+    model = ElectraModel.from_pretrained(electra).to(device)
     tokenizer = ElectraTokenizer.from_pretrained(electra)
 
     # 문서 데이터 파일 로드
@@ -36,10 +36,23 @@ def main():
     
     for doc_id in tqdm(train_sets):
         sents = j_doc[doc_id]['sents']
-        a = tokenizer.encode(sents, padding=True, return_tensors='pt').cuda()
-        o = model(a)
-        o_np = o[0].cpu().detach().numpy()
-        np.save(f'summary_embed/{doc_id}.embed', o_np)
+        encoded_sents = []
+        max_in_sent = 0
+        for sent in sents:
+            a = tokenizer.encode(sent)
+            if len(a) > max_in_sent:
+                max_in_sent = len(a)
+            
+            encoded_sents.append(a)
+        
+        for i, e in enumerate(encoded_sents):
+            encoded_sents[i] += [0] * (max_in_sent - len(e))
+            
+        x_inputs = torch.LongTensor(encoded_sents).to(device)
+        y = model(x_inputs)
+        y_np = y[0].cpu().detach().numpy()
+
+        np.save(f'summary_embed/{doc_id}.embed', y_np)
 
     # CPU로 실행 시간 테스트
     end = time.time()
