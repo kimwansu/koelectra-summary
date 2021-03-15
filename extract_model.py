@@ -32,23 +32,14 @@ def main():
     with open(corpus_dir + 'doc_summary4.json', 'r', encoding='utf-8') as f:
         j_doc = json.load(f)
 
-    # 문서 인덱스 파일 로드
-    with open(corpus_dir + 'splitted_doclist.json', 'r', encoding='utf-8') as f:
-        j_idx = json.load(f)
-
-    train_sets = j_idx['train']
-    for train_set in train_sets:
-        for doc_id in tqdm(train_set):
-            sents = j_doc[doc_id]['sents']
-            embed = np.empty()
-            for i, sent in enumerate(sents):
-                a = tokenizer.encode(sent, return_tensors='pt').cuda()
-                o = model(a).cpu()
-                # softmax용으로 후보 여러개 나오는 걸 고려해서 배열 비슷한 무언가로 만든 듯
-                o_np = o[0].cpu().detach().numpy()
-                
-                # 적절하게 합치는 방법을 못찾아서 임시로 문장마다 임베딩 저장
-                np.save(f'summary_embed/{doc_id}_{i}.embed', o_np)
+    train_sets = j_doc
+    
+    for doc_id in tqdm(train_sets):
+        sents = j_doc[doc_id]['sents']
+        a = tokenizer.encode(sents, padding=True, return_tensors='pt').cuda()
+        o = model(a)
+        o_np = o[0].cpu().detach().numpy()
+        np.save(f'summary_embed/{doc_id}.embed', o_np)
 
     # CPU로 실행 시간 테스트
     end = time.time()
