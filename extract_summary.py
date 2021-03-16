@@ -53,14 +53,15 @@ def main():
 
     model = torch.nn.LSTM(
         input_size=EMBED_SIZE,
-        hidden_size=1,
-        num_layers=2,
+        hidden_size=32,
+        num_layers=4,
         batch_first=True,
         bidirectional=True).to(device)
 
-    model_out = nn.Linear(2, 1).to(device)
+    model_out = nn.Linear(64, 1).to(device)
+    torch.nn.init.kaiming_uniform_(model_out.weight)
 
-    lr = 0.01
+    lr = 0.1
     criterion = nn.BCELoss().to(device)
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=3)
