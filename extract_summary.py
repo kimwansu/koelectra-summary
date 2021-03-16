@@ -53,12 +53,12 @@ def main():
 
     model = torch.nn.LSTM(
         input_size=EMBED_SIZE,
-        hidden_size=32,
-        num_layers=4,
+        hidden_size=128,
+        num_layers=2,
         batch_first=True,
         bidirectional=True).to(device)
 
-    model_out = nn.Linear(64, 1).to(device)
+    model_out = nn.Linear(256, 1).to(device)
     torch.nn.init.kaiming_uniform_(model_out.weight)
 
     lr = 0.1
