@@ -58,8 +58,11 @@ def main():
         batch_first=True,
         bidirectional=True).to(device)
 
-    model_out = nn.Linear(256, 1).to(device)
-    torch.nn.init.kaiming_uniform_(model_out.weight)
+    linear1 = nn.Linear(256, 256).to(device)
+    torch.nn.init.kaiming_uniform_(linear1.weight)
+
+    linear_out = nn.Linear(256, 1).to(device)
+    torch.nn.init.kaiming_uniform_(linear_out.weight)
 
     lr = 0.1
     criterion = nn.BCELoss().to(device)
@@ -116,7 +119,8 @@ def main():
             embeds = np.load(full_fname)
             embed_tensors = torch.Tensor(embeds).to(device)
             output, status = model(embed_tensors)
-            label_H = torch.sigmoid(model_out(output))
+            output = torch.relu(linear1(output))
+            label_H = torch.sigmoid(linear_out(output))
             label_H = label_H.squeeze(2)  # 마지막 괄호 제거
             label_H = label_H[:, -1].to(cpu)  # 마지막 상태만 추출
 
@@ -143,7 +147,8 @@ def main():
                 v_embeds = np.load(v_full_fname)
                 v_embed_tensors = torch.Tensor(v_embeds).to(device)
                 v_output, v_status = model(v_embed_tensors)
-                v_label_H = torch.sigmoid(model_out(v_output))
+                v_output = torch.relu(linear1(v_output))
+                v_label_H = torch.sigmoid(linear_out(v_output))
                 v_label_H = v_label_H.squeeze(2)
                 v_label_H = v_label_H[:, -1].to(cpu)
 
