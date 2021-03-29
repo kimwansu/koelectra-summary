@@ -22,7 +22,7 @@ def main():
     cpu = torch.device('cpu')
     device = cuda if torch.cuda.is_available() else cpu
 
-    electra = 'monologg/koelectra-base-v2-discriminator'
+    electra = 'monologg/koelectra-small-v2-discriminator'
 
     # KoELECTRA 모델 로드(v2)
     model = ElectraModel.from_pretrained(electra).to(device)
@@ -61,7 +61,7 @@ def main():
         
         y_np = torch.cat(results).numpy()
 
-        np.save(f'summary_embed/{doc_id}.embed', y_np)
+        np.save(f'summary_embed2/{doc_id}.embed', y_np)
 
     # CPU로 실행 시간 테스트
     end = time.time()

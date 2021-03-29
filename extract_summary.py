@@ -6,6 +6,7 @@ import random
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
 
@@ -21,7 +22,7 @@ EMBED_SIZE = 768
 
 OUTPUT_COUNT = 2  # 출력 레이블 종류(0, 1)
 
-cuda = torch.device('cuda:1')
+cuda = torch.device('cuda:0')
 cpu = torch.device('cpu')
 device = cuda if torch.cuda.is_available() else cpu
 
@@ -51,23 +52,37 @@ def main():
     cpu = torch.device('cpu')
     device = cuda if torch.cuda.is_available() else cpu
 
+    #'''
     model = torch.nn.LSTM(
         input_size=EMBED_SIZE,
-        hidden_size=128,
-        num_layers=2,
+        hidden_size=32,
+        num_layers=1,
         batch_first=True,
         bidirectional=True).to(device)
+    #'''
 
-    linear1 = nn.Linear(256, 256).to(device)
-    torch.nn.init.kaiming_uniform_(linear1.weight)
+    #linear1 = nn.Linear(512, 128).to(device)
+    #torch.nn.init.kaiming_uniform_(linear1.weight)
+    #torch.nn.init.zeros_(linear1.weight)
+    #torch.nn.init.xavier_uniform(linear1.weight)
 
-    linear_out = nn.Linear(256, 1).to(device)
+    
+
+    linear_out = nn.Linear(64, 1).to(device)
+    #model = nn.Linear(EMBED_SIZE, 1).to(device)
     torch.nn.init.kaiming_uniform_(linear_out.weight)
+    #torch.nn.init.kaiming_uniform_(model.weight)
+    #torch.nn.init.zeros_(linear_out.weight)
+    #torch.nn.init.xavier_uniform(linear_out.weight)
 
-    lr = 0.1
+    #nn.LayerNorm()
+
+
+    lr = 2e-5
     criterion = nn.BCELoss().to(device)
-    optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=3)
+    #optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
+    optimizer = optim.Adam(model.parameters(), lr=lr)
+    #scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=3)
 
     # 정답 라벨 데이터 로드
     with open(corpus_dir + 'doc_summary4.json', 'r', encoding='utf-8') as f:
@@ -96,12 +111,16 @@ def main():
     patience = 0
 
     best_loss_val = float('inf')
+    best_loss_train = float('inf')
     best_epoch = 0
     best_state = None
 
     stop_by_val_data = False
 
+    """
     for epoch in range(n_epochs):
+        model.train()
+
         avg_loss_train = 0.0
         avg_loss_val = 0.0
         data_count = len(train_doc_ids)
@@ -118,11 +137,21 @@ def main():
             # 한 문서의 모든 문장의 KoELECTRA 임베딩
             embeds = np.load(full_fname)
             embed_tensors = torch.Tensor(embeds).to(device)
+
+            
+
+
+            xxx = 999
             output, status = model(embed_tensors)
-            output = torch.relu(linear1(output))
-            label_H = torch.sigmoid(linear_out(output))
+            #output = model(embed_tensors)
+            #output = torch.relu(linear1(output))
+
+            output = F.layer_norm(output, output.shape).to(device)
+
+            #label_H = torch.sigmoid(linear_out(output))
+            label_H = torch.sigmoid(output)
             label_H = label_H.squeeze(2)  # 마지막 괄호 제거
-            label_H = label_H[:, -1].to(cpu)  # 마지막 상태만 추출
+            label_H = label_H[:, 0].to(cpu)  # 마지막 상태만 추출
 
             label_Y = torch.Tensor(j_doc[doc_id]['labels'])
 
@@ -135,7 +164,10 @@ def main():
         # 여기쯤에서 검증 말뭉치로 성능 측정 시도
         # 일정 횟수 이상 성능 개선이 되지 않으면 마지막 최고성능 가중치로 복원 후 종료
         # 중간중간 상태 기록 필요
+        
         with torch.no_grad():
+            model.eval()
+
             v_data_count = len(val_doc_ids)
             for v_doc_id in tqdm(val_doc_ids):
                 fname = v_doc_id + '.embed.npy'
@@ -146,11 +178,19 @@ def main():
 
                 v_embeds = np.load(v_full_fname)
                 v_embed_tensors = torch.Tensor(v_embeds).to(device)
+
+                
+
                 v_output, v_status = model(v_embed_tensors)
-                v_output = torch.relu(linear1(v_output))
-                v_label_H = torch.sigmoid(linear_out(v_output))
+                #v_output = model(v_embed_tensors)
+                #v_output = torch.relu(linear1(v_output))
+                #v_label_H = torch.sigmoid(linear_out(v_output))
+
+                v_output = F.layer_norm(v_output, v_output.shape).to(device)
+
+                v_label_H = torch.sigmoid(v_output)
                 v_label_H = v_label_H.squeeze(2)
-                v_label_H = v_label_H[:, -1].to(cpu)
+                v_label_H = v_label_H[:, 0].to(cpu)
 
                 v_label_Y = torch.Tensor(j_doc[v_doc_id]['labels'])
 
@@ -158,7 +198,9 @@ def main():
                 avg_loss_val += loss_val.item() / v_data_count
 
         if avg_loss_val < best_loss_val:
+        #if avg_loss_train < best_loss_train:
             best_loss_val = avg_loss_val
+            #best_loss_train = avg_loss_train
             best_epoch = epoch
             best_state = model.state_dict()
             patience = max_patience
@@ -168,10 +210,14 @@ def main():
             if patience == 0:
                 break
 
-        scheduler.step(avg_loss_val)
+        #scheduler.step(avg_loss_val)
+        #scheduler.step(avg_loss_train)
 
         msg = 'NEW BEST' if patience == max_patience else f'patience={patience}'
-        print(f'[Epoch {epoch+1:>4}] train_cost = {avg_loss_train:>.9}, val_cost = {avg_loss_val:>.9} {msg} lr = {scheduler._last_lr}')
+        print(f'[Epoch {epoch+1:>4}] train_cost = {avg_loss_train:>.9}, val_cost = {avg_loss_val:>.9} {msg}')# lr = {scheduler._last_lr}')
+
+        if epoch % 10 == 0:
+            torch.save(model.state_dict(), f'model_lnorm{epoch+1}.pt')
 
     if stop_by_val_data:
         print(f'Epoch {best_epoch:>4} stop by validation data.')
@@ -185,6 +231,52 @@ def main():
     end = time.time()
     elapsed = end - start
     print(elapsed)
+    #"""
+
+    # 모델 테스트
+    t_data_count = len(test_doc_ids)
+    model.load_state_dict(torch.load('model_lnorm1.pt'))
+    with torch.no_grad():
+        model.eval()
+
+        avg_loss_test = 0.0
+
+        test_correct = 0
+        test_total = 0
+        for t_doc_id in tqdm(test_doc_ids):
+            fname = t_doc_id + '.embed.npy'
+            t_full_fname = os.path.join(embed_path, fname)
+            if not os.path.exists(t_full_fname):
+                t_data_count -= 1
+                continue
+
+            t_embeds = np.load(t_full_fname)
+            t_embed_tensors = torch.Tensor(t_embeds).to(device)
+
+            
+
+            t_output, t_status = model(t_embed_tensors)
+
+            t_output = F.layer_norm(t_output, t_output.shape).to(device)
+
+            #t_output = model(t_embed_tensors)
+            #v_output = torch.relu(linear1(v_output))
+            #v_label_H = torch.sigmoid(linear_out(v_output))
+            t_label_H = torch.sigmoid(t_output)
+            t_label_H = t_label_H.squeeze(2)
+            t_label_H = t_label_H[:, 0].to(cpu)
+
+            t_label_Y = torch.Tensor(j_doc[t_doc_id]['labels'])
+
+            loss_test = criterion(t_label_H, t_label_Y)
+            avg_loss_test += loss_test.item() / t_data_count
+
+            test_correct += (t_label_H == t_label_Y).sum()
+            test_total += len(t_label_Y)
+
+        print(f'test loss: avg_loss_test: {avg_loss_test}')
+        print(f'{test_correct}/{test_total}  {test_correct / test_total}')
+
 
 
 if __name__ == '__main__':
